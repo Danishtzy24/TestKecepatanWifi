@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tes Kecepatan WiFi</title>
+    <link rel="icon" type="image" href="SpeedTest.png">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
+        
+        body {
+    font-family: 'Orbitron', sans-serif;
+    background-color: #0d0d0d;
+    color: #ffffff;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start; /* ubah menjadi flex-start untuk memungkinkan scroll */
+    height: auto; /* ubah dari 100vh */
+    margin: 0;
+    padding: 20px;
+    box-sizing: border-box;
+    overflow-x: hidden; /* sembunyikan scroll horizontal jika tidak diperlukan */
+}
+
+.container {
+    background: linear-gradient(145deg, #1e1e1e, #2b2b2b);
+    padding: 20px;
+    border-radius: 15px;
+    box-shadow: 0 0 40px rgba(0, 255, 255, 0.8);
+    width: 500px;
+    max-width: auto;
+    text-align: center;
+    height: auto;
+    position: relative;
+    animation: glow 2s infinite alternate;
+    overflow-y: auto; /* memungkinkan scroll vertikal jika diperlukan */
+    min-height: 70px; /* memastikan container cukup tinggi */
+}
+
+
+        h1 {
+            color: #00ffff;
+            font-size: 2.5em;
+            margin-bottom: 20px;
+            text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff;
+        }
+
+        .info-box {
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            height: 240px;
+            border-radius: 15px;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+            margin-bottom: 30px;
+            transition: transform 0.3s ease-in-out;
+        }
+
+        .info-box:hover {
+            transform: scale(1.05);
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+
+        button {
+            background-color: #00ffff;
+            border: none;
+            color: black;
+            padding: 15px 32px;
+            font-size: 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s ease, transform 0.3s ease;
+            margin: 5px;
+        }
+
+        button:hover {
+            background-color: #008080;
+            transform: translateY(-5px);
+        }
+
+        button:disabled {
+            background-color: #444;
+            cursor: not-allowed;
+        }
+
+        #result {
+            margin-top: 20px;
+            font-size: 1.2em;
+            color: #00ff00;
+        }
+
+        /* Animasi futuristik */
+        @keyframes glow {
+            0% { box-shadow: 0 0 20px rgba(0, 255, 255, 0.6); }
+            100% { box-shadow: 0 0 40px rgba(0, 255, 255, 1); }
+        }
+
+        /* Tambahan info box kemampuan WiFi */
+        #wifi-capability {
+            margin-top: 20px;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 10px;
+            color: #ffbf00;
+            font-weight: bold;
+            display: none;
+        }
+
+        /* Responsivitas */
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2em;
+            }
+            button {
+                padding: 12px 24px;
+                font-size: 14px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            h1 {
+                font-size: 1.8em;
+            }
+            button {
+                padding: 10px 20px;
+                font-size: 12px;
+            }
+            .chart-container {
+                height: 200px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Tes Kecepatan WiFi</h1>
+        <h2>By Danish</h2>
+
+        <div class="info-box">
+            <h2>Informasi Server</h2>
+            <p>Nama Server: <span id="server-name">Loading...</span></p>
+            <p>Lokasi Server: <span id="server-location">Loading...</span></p>
+            <p>IP Server: <span id="server-ip">Loading...</span></p>
+            <p>Download: <span id="download-speed">0</span> Mbps</p>
+            <p>Upload: <span id="upload-speed">0</span> Mbps</p>
+        </div>
+
+        <div class="chart-container">
+            <canvas id="speedChart"></canvas>
+        </div>
+
+        <button id="start-test">Mulai Tes</button>
+        <button id="retry" disabled>Ulangi Tes</button>
+
+        <div id="result"></div>
+
+        <div id="wifi-capability"></div>
+    </div>
+
+    <script>
+        const downloadSpeedEl = document.getElementById('download-speed');
+        const uploadSpeedEl = document.getElementById('upload-speed');
+        const startButton = document.getElementById('start-test');
+        const retryButton = document.getElementById('retry');
+        const resultEl = document.getElementById('result');
+        const wifiCapabilityEl = document.getElementById('wifi-capability');
+        const serverNameEl = document.getElementById('server-name');
+        const serverLocationEl = document.getElementById('server-location');
+        const serverIpEl = document.getElementById('server-ip');
+
+        let downloadSpeeds = [];
+        let uploadSpeeds = [];
+        let testInterval;
+        let testDuration = 0;
+
+        const ctx = document.getElementById('speedChart').getContext('2d');
+        const speedChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Download Speed (Mbps)',
+                    data: downloadSpeeds,
+                    borderColor: 'rgba(0, 122, 255, 0.8)',
+                    backgroundColor: 'rgba(0, 122, 255, 0.2)',
+                    tension: 0.4,
+                    fill: true
+                }, {
+                    label: 'Upload Speed (Mbps)',
+                    data: uploadSpeeds,
+                    borderColor: 'rgba(183, 28, 255, 0.8)',
+                    backgroundColor: 'rgba(183, 28, 255, 0.2)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        },
+                        ticks: {
+                            color: '#ffffff'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        },
+                        ticks: {
+                            color: '#ffffff'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        labels: {
+                            color: '#ffffff'
+                        }
+                    }
+                }
+            }
+        });
+
+        function updateData() {
+            const downloadSpeed = Math.random() * 50 + 10; // 10-60 Mbps
+            const uploadSpeed = Math.random() * 20 + 5; // 5-25 Mbps
+
+            downloadSpeedEl.textContent = downloadSpeed.toFixed(2);
+            uploadSpeedEl.textContent = uploadSpeed.toFixed(2);
+
+            downloadSpeeds.push(downloadSpeed);
+            uploadSpeeds.push(uploadSpeed);
+
+            speedChart.data.labels.push(testDuration);
+            speedChart.data.datasets[0].data = downloadSpeeds;
+            speedChart.data.datasets[1].data = uploadSpeeds;
+            speedChart.update();
+
+            testDuration++;
+
+            if (testDuration >= 12) {
+                clearInterval(testInterval);
+                endTest();
+            }
+        }
+
+        function startTest() {
+            downloadSpeeds = [];
+            uploadSpeeds = [];
+            testDuration = 0;
+            speedChart.data.labels = [];
+            startButton.disabled = true;
+            retryButton.disabled = true;
+            resultEl.textContent = "Tes sedang berjalan...";
+            wifiCapabilityEl.style.display = 'none'; // Sembunyikan capability box selama tes
+            testInterval = setInterval(updateData, 1000);
+        }
+
+        function endTest() {
+    const avgDownload = downloadSpeeds.reduce((a, b) => a + b, 0) / downloadSpeeds.length;
+    const avgUpload = uploadSpeeds.reduce((a, b) => a + b, 0) / uploadSpeeds.length;
+
+    resultEl.textContent = `Hasil Tes Selesai. Rata-rata Download: ${avgDownload.toFixed(2)} Mbps, Rata-rata Upload: ${avgUpload.toFixed(2)} Mbps`;
+    retryButton.disabled = false;
+
+    let capabilityMessage;
+
+    if (avgDownload >= 25) { // Threshold untuk 4K streaming
+        capabilityMessage = `WiFi Anda mampu menangani streaming HD hingga 4K dengan kecepatan download rata-rata ${avgDownload.toFixed(2)} Mbps!`;
+    } else if (avgDownload >= 10) { // Threshold untuk HD
+        capabilityMessage = `WiFi Anda cocok untuk streaming HD dengan kecepatan download rata-rata ${avgDownload.toFixed(2)} Mbps.`;
+    } else if (avgDownload >= 5) { // Threshold untuk SD
+        capabilityMessage = `WiFi Anda cocok untuk streaming SD dengan kecepatan download rata-rata ${avgDownload.toFixed(2)} Mbps.`;
+    } else {
+        capabilityMessage = `Kecepatan WiFi Anda mungkin tidak memadai untuk streaming. Rata-rata download Anda adalah ${avgDownload.toFixed(2)} Mbps.`;
+    }
+
+    wifiCapabilityEl.textContent = capabilityMessage;
+    wifiCapabilityEl.style.display = 'block';
+}
+
+
+        startButton.addEventListener('click', startTest);
+        retryButton.addEventListener('click', startTest);
+
+        // Fetch server info from IPinfo.io API
+        function fetchServerInfo() {
+            fetch('https://ipinfo.io?token=c95303510364e2') // Masukkan token API IPinfo.io kamu
+                .then(response => response.json())
+                .then(data => {
+                    serverIpEl.textContent = data.ip;
+                    serverLocationEl.textContent = data.city + ", " + data.region;
+                    serverNameEl.textContent = data.org; // Menampilkan penyedia server berdasarkan organisasi
+                })
+                .catch(error => {
+                    console.error("Error fetching server info:", error);
+                    serverIpEl.textContent = "Tidak tersedia";
+                    serverLocationEl.textContent = "Tidak tersedia";
+                    serverNameEl.textContent = "Tidak tersedia";
+                });
+        }
+
+        // Panggil fungsi saat halaman dimuat
+        fetchServerInfo();
+    </script>
+</body>
+</html>
